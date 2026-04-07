@@ -2,28 +2,11 @@
 """
 TEKEMEN BARAN — Kardiyovasküler Risk Tahmini (LSTM)
 MIT-BIH v7 — Stratified Hasta Bölmesi
-
-Önceki (v6) sorun:
-  GroupShuffleSplit 44 hasta gibi küçük bir sette dengesiz bölünme yaptı.
-  Ağır aritmik hastalar (208:%95, 232:%94, 233:%84) rastgele test setine
-  düştü. Model bu hastaları hiç görmeden test edildi → AUC 0.65'e çöktü.
-  Test aritmik oranı %27 olurken train %20'de kaldı.
-
-v6 → v7 değişiklikleri:
-  1. GroupShuffleSplit TAMAMEN KALDIRILDI
-  2. Stratified hasta bölmesi:
-     - Hastalar aritmik oranına göre sırala (yüksekten düşüğe)
-     - 10'lu döngü: 0-6 → train | 7 → val | 8-9 → test
-     - Her kümede yüksek/düşük aritmikli hastalar dengeli dağılır
-     - Deterministik: seed'den bağımsız, her çalıştırmada aynı sonuç
-  3. Dropout: 0.40/0.35/0.20 korundu (v6'dan)
-  4. L2: 2e-4 korundu (v6'dan)
-  5. 44 kayıt korundu (v6'dan)
 """
 
-# ─────────────────────────────────────────────
-# 1. KÜTÜPHANELER
-# ─────────────────────────────────────────────
+
+#KÜTÜPHANE
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -46,9 +29,9 @@ from mitbih_loader_v7 import load_mitbih, normalize_mitbih
 np.random.seed(42)
 tf.random.set_seed(42)
 
-# ─────────────────────────────────────────────
-# 2. PARAMETRELER
-# ─────────────────────────────────────────────
+
+#PARAMETRELER
+
 time_steps   = 60
 features     = 3
 HR_SCALE     = 0.5
@@ -57,9 +40,9 @@ ECG_SCALE    = 1.0
 RECALL_HEDEF = 0.85
 
 
-# ─────────────────────────────────────────────
-# 3. FOCAL LOSS
-# ─────────────────────────────────────────────
+
+#FOCAL LOSS
+
 def focal_loss(gamma: float = 2.0, alpha: float = 0.75):
     def loss_fn(y_true, y_pred):
         y_true  = tf.cast(y_true, tf.float32)
@@ -70,9 +53,9 @@ def focal_loss(gamma: float = 2.0, alpha: float = 0.75):
     return loss_fn
 
 
-# ─────────────────────────────────────────────
-# 4. VERİ YÜKLEME
-# ─────────────────────────────────────────────
+
+#VERİ YÜKLEME
+
 print("=" * 60)
 print("FAZ 1: VERİ YÜKLEME (MIT-BIH v7 — 44 kayit)")
 print("=" * 60)
@@ -88,19 +71,14 @@ print(f"\n  Toplam pencere : {len(y)}")
 print(f"  Normal  (y=0)  : {int(np.sum(y==0))}  (%{np.sum(y==0)/len(y)*100:.1f})")
 print(f"  Aritmik (y=1)  : {int(np.sum(y==1))}  (%{np.sum(y==1)/len(y)*100:.1f})")
 
-# ─────────────────────────────────────────────
-# 5. NORMALİZASYON
-# ─────────────────────────────────────────────
+
+#NORMALİZASYON
+
 X_norm = normalize_mitbih(X_raw, y, patient_id,
                            patient_hr_base, patient_spo2_base)
 
-# ─────────────────────────────────────────────
+
 # 6. STRATİFİED HASTA BAZLI BÖLME
-#
-#  Neden GroupShuffleSplit değil?
-#  44 hasta gibi küçük bir sette, GroupShuffleSplit'in rastgele seçimi
-#  test setine orantısız aritmik hasta düşürebiliyor (v6'da %27 oldu).
-#
 #  Stratified yöntem:
 #  Hastaları aritmik oranına göre yüksekten düşüğe sırala.
 #  10'lu döngüyle dönüşümlü ata:
@@ -108,10 +86,10 @@ X_norm = normalize_mitbih(X_raw, y, patient_id,
 #    i % 10 == 7 → val    (%10)
 #    i % 10 >= 8 → test   (%20)
 #
-#  Böylece en aritmik hasta train'e, ikincisi val'e, üçüncüsü test'e,
-#  dördüncüsü tekrar train'e düşer. Her küme dengeli olur.
-#  Deterministik: seed'den bağımsız, her çalıştırmada aynı bölünme.
-# ─────────────────────────────────────────────
+#  Böylece en aritmik hasta train'e, ikincisi val'e, üçüncüsü teste
+#  dördüncüsü tekrar traine düşer her küme dengeli olur
+#  Deterministik: seed'den bağımsız, her çalıştırmada aynı bölünme
+
 print("\n" + "=" * 60)
 print("FAZ 2: STRATİFİED HASTA BAZLI BÖLME")
 print("=" * 60)
@@ -171,17 +149,17 @@ if max_fark > 5:
 else:
     print(f"\n  Aritmik oran farki %{max_fark:.1f} — bölünme dengeli.")
 
-# ─────────────────────────────────────────────
-# 7. SINIF AĞIRLIĞI
-# ─────────────────────────────────────────────
+
+#SINIF AĞIRLIĞI
+
 pos_ratio    = float(np.sum(y_tr == 0)) / max(float(np.sum(y_tr == 1)), 1)
 CLASS_WEIGHT = {0: 1.0, 1: min(pos_ratio, 4.0)}
 print(f"\n  Sinif agirliigi: {{0: 1.0, 1: {CLASS_WEIGHT[1]:.2f}}}  "
       f"(pos_ratio={pos_ratio:.2f})")
 
-# ─────────────────────────────────────────────
-# 8. MODEL
-# ─────────────────────────────────────────────
+
+#MODEL
+
 print("\n" + "=" * 60)
 print("FAZ 3: MODEL")
 print("=" * 60)
@@ -212,9 +190,9 @@ model.compile(
 )
 model.summary()
 
-# ─────────────────────────────────────────────
-# 9. EĞİTİM
-# ─────────────────────────────────────────────
+
+#EĞİTİM
+
 print("\n" + "=" * 60)
 print("FAZ 4: EGİTİM")
 print("=" * 60)
@@ -248,9 +226,9 @@ history = model.fit(
     verbose=1
 )
 
-# ─────────────────────────────────────────────
-# 10. THRESHOLD SEÇİMİ — Recall Odaklı
-# ─────────────────────────────────────────────
+
+#THRESHOLD SEÇİMİ — Recall Odaklı
+
 print("\n" + "=" * 60)
 print(f"FAZ 5: THRESHOLD SECİMİ (recall >= {RECALL_HEDEF})")
 print("=" * 60)
@@ -303,9 +281,9 @@ for row in tarama[::10]:
     print(f"  {t_:>6.2f} | {rec_:>7.3f} | {prec_:>7.3f} | "
           f"{f1_:>6.3f} | {fp_:>5} | {fn_:>5} | {tp_:>5}{marker}")
 
-# ─────────────────────────────────────────────
-# 11. SONUÇLAR
-# ─────────────────────────────────────────────
+
+#SONUÇLAR
+
 print("\n" + "=" * 60)
 print("FAZ 6: SONUCLAR")
 print("=" * 60)
@@ -350,9 +328,9 @@ gap           = final_tr_acc - final_val_acc
 print(f"\n  Train-Val gap: %{gap*100:.1f}  "
       f"{'UYARI - overfitting' if gap > 0.08 else 'Kontrol altinda'}")
 
-# ─────────────────────────────────────────────
-# 12. GÖRSELLEŞTİRME
-# ─────────────────────────────────────────────
+
+#GÖRSELLEŞTİRME
+
 
 # Confusion Matrix
 plt.figure(figsize=(6, 5))
@@ -418,9 +396,9 @@ plt.tight_layout()
 plt.savefig("threshold_v7.png", dpi=120)
 plt.show()
 
-# ─────────────────────────────────────────────
-# 13. DASHBOARD
-# ─────────────────────────────────────────────
+
+#DASHBOARD
+
 def draw_gauge(ax, value, vmin, vmax, normal_max, title, unit, color):
     val_c = np.clip(value, vmin, vmax)
     theta = np.pi + (0 - np.pi) * (val_c - vmin) / (vmax - vmin)
@@ -568,9 +546,9 @@ for dash_idx, dash_label in pairs:
     plt.show()
     print(f"  Dashboard kaydedildi: {fname}")
 
-# ─────────────────────────────────────────────
-# 14. MODEL KAYDETME
-# ─────────────────────────────────────────────
+
+#MODEL KAYDETME
+
 model.save("bileklik_model_v7.keras")
 print("\nModel kaydedildi: bileklik_model_v7.keras")
 print("\n" + "=" * 60)

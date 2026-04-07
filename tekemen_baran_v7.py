@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 """
 TEKEMEN BARAN — Kardiyovasküler Risk Tahmini (LSTM)
 MIT-BIH v7 — Stratified Hasta Bölmesi

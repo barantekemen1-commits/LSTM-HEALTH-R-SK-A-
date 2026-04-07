@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 """
 MIT-BIH Arrhythmia Database — Veri Yükleme Modülü v7
 loader tarafında değişiklik yok

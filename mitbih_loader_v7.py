@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 MIT-BIH Arrhythmia Database — Veri Yükleme Modülü v7
-v6 ile tamamen aynı — loader tarafında değişiklik yok.
+loader tarafında değişiklik yok
 """
 
 import numpy as np
